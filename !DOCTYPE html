@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventory Tetris</title>
+    <style>
+        body {
+            background-color: #2c3e50;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            touch-action: none; /* スマホでのスクロール防止 */
+            overflow: hidden;
+        }
+
+        h1 { font-size: 20px; margin: 10px; }
+        #score-board { font-size: 18px; margin-bottom: 10px; color: #f1c40f; }
+
+        /* カバン（グリッド）のスタイル */
+        #grid-container {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            background-color: #34495e;
+            padding: 5px;
+            border-radius: 8px;
+            border: 4px solid #95a5a6;
+            touch-action: none;
+        }
+
+        .cell {
+            width: 45px;
+            height: 45px;
+            background-color: #2c3e50;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+
+        .cell.filled { background-color: #3e2723; box-shadow: inset 0 0 10px #000; }
+        .cell.highlight { background-color: rgba(46, 204, 113, 0.5); } /* 配置予測 */
+        .cell.invalid { background-color: rgba(231, 76, 60, 0.5); } /* 置けない時 */
+
+        /* アイテム置き場 */
+        #spawner {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            height: 100px;
+            align-items: center;
+        }
+
+        .item-preview {
+            display: grid;
+            gap: 1px;
+            cursor: grab;
+            touch-action: none;
+            transition: transform 0.1s;
+        }
+        
+        .item-cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            border-radius: 2px;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* ドラッグ中のスタイル */
+        .dragging {
+            position: fixed;
+            pointer-events: none; /* 下の要素を判定するために必要 */
+            z-index: 1000;
+            opacity: 0.9;
+            transform: scale(1.5); /* 指で隠れないように少し大きく */
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background: #e67e22;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎒 インベントリ整理</h1>
+    <div id="score-board">Score: 0</div>
+
+    <div id="grid-container"></div>
+
+    <div id="spawner">
+        </div>
+
+    <div id="game-over">
+        <h2 style="color: #e74c60;">Inventory Full!</h2>
+        <button onclick="resetGame()">Retry</button>
+    </div>
+
+<script>
+    // --- 設定 ---
+    const COLS = 6;
+    const ROWS = 8;
+    const gridContainer = document.getElementById('grid-container');
+    const spawner = document.getElementById('spawner');
+    const scoreBoard = document.getElementById('score-board');
+    let grid = []; // 0:空, 1:埋まり
+    let score = 0;
+    
+    // アイテム定義（形と色と絵文字）
+    const ITEMS = [
+        { shape: [[1]], color: '#e74c3c', icon: '🍎' }, // りんご（1マス）
+        { shape: [[1],[1]], color: '#3498db', icon: '🗡️' }, // 剣（縦2）
+        { shape: [[1,1]], color: '#3498db', icon: '🗡️' }, // 剣（横2）
+        { shape: [[1,1],[1,1]], color: '#f1c40f', icon: '🛡️' }, // 盾（2x2）
+        { shape: [[1,0],[1,1]], color: '#9b59b6', icon: '🔮' }, // L字
+        { shape: [[0,1],[1,1]], color: '#2ecc71', icon: '🌿' }, // 逆L字
+        { shape: [[1,1,1]], color: '#ecf0f1', icon: '🥖' }, // パン（横3）
+    ];
+
+    // --- 初期化 ---
+    function init() {
+        grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+        score = 0;
+        updateScore();
+        renderGrid();
+        spawnItem();
+        spawnItem();
+        spawnItem();
+    }
+
+    function renderGrid() {
+        gridContainer.innerHTML = '';
+        grid.forEach((row, y) => {
+            row.forEach((cell, x) => {
+                const div = document.createElement('div');
+                div.classList.add('cell');
+                div.dataset.x = x;
+                div.dataset.y = y;
+                if (cell) {
+                    div.classList.add('filled');
+                    div.style.backgroundColor = cell.color; // 背景色
+                    div.textContent = cell.icon; // 絵文字
+                }
+                gridContainer.appendChild(div);
+            });
+        });
+    }
+
+    // --- アイテム生成 ---
+    function spawnItem() {
+        if (spawner.children.length >= 3) return;
+
+        const type = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+        const el = document.createElement('div');
+        el.classList.add('item-preview');
+        // グリッドレイアウトで形を作る
+        el.style.gridTemplateColumns = `repeat(${type.shape[0].length}, 1fr)`;
+        
+        type.shape.forEach(row => {
+            row.forEach(cell => {
+                const cellDiv = document.createElement('div');
+                cellDiv.classList.add('item-cell');
+                if (cell) {
+                    cellDiv.style.backgroundColor = type.color;
+                    cellDiv.textContent = type.icon;
+                } else {
+                    cellDiv.style.opacity = 0; // 空白部分
+                }
+                el.appendChild(cellDiv);
+            });
+        });
+
+        // ドラッグイベント付与
+        addDragLogic(el, type);
+        spawner.appendChild(el);
+    }
+
+    // --- ドラッグ＆ドロップロジック（スマホ対応） ---
+    function addDragLogic(element, itemData) {
+        let isDragging = false;
+        let clone = null;
+        let startX, startY;
+
+        const startDrag = (e) => {
+            e.preventDefault(); // スクロール防止
+            isDragging = true;
+            
+            // タッチかマウスかの判定
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            // ドラッグ用のクローンを作成
+            clone = element.cloneNode(true);
+            clone.classList.add('dragging');
+            // 元の要素と同じサイズにする
+            clone.style.width = element.offsetWidth + 'px';
+            clone.style.height = element.offsetHeight + 'px';
+            
+            document.body.appendChild(clone);
+            moveAt(clientX, clientY);
+
+            // 元の要素を一時的に見えなくする
+            element.style.opacity = '0.3';
+        };
+
+        const moveAt = (x, y) => {
+            if(!clone) return;
+            // 指の少し上に表示（見やすくするため）
+            clone.style.left = x - clone.offsetWidth / 2 + 'px';
+            clone.style.top = y - clone.offsetHeight / 2 - 50 + 'px'; 
+            
+            // ハイライト処理
+            highlightGrid(x, y - 50, itemData.shape);
+        };
+
+        const onMove = (e) => {
+            if (!isDragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            moveAt(clientX, clientY);
+        };
+
+        const endDrag = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            // ドロップ位置の判定
+            // 最後にタッチしていた位置を取得
+            const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+            const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY; // 指のオフセット考慮
+
+            const dropSuccess = tryPlaceItem(clientX, clientY - 50, itemData);
+
+            if (dropSuccess) {
+                element.remove(); // 元の要素を削除
+                spawnItem(); // 新しいアイテム補充
+                checkLines(); // ライン判定
+                checkGameOver(); // ゲームオーバー判定
+            } else {
+                element.style.opacity = '1'; // 元に戻す
+            }
+
+            if(clone) clone.remove();
+            clearHighlight();
+        };
+
+        // イベントリスナー登録 (マウス & タッチ)
+        element.addEventListener('mousedown', startDrag);
+        element.addEventListener('touchstart', startDrag, {passive: false});
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, {passive: false});
+
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+    }
+
+    // --- グリッド判定ロジック ---
+    function getGridPos(x, y) {
+        // 画面上の座標からグリッドのインデックス(x,y)を計算
+        // グリッドコンテナの位置情報を取得
+        const rect = gridContainer.getBoundingClientRect();
+        
+        // 範囲外ならnull
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
+
+        const cellSize = rect.width / COLS;
+        const col = Math.floor((x - rect.left) / cellSize);
+        const row = Math.floor((y - rect.top) / cellSize);
+
+        // バッファを持たせて正確なマスを返す
+        if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+            return { c: col, r: row };
+        }
+        return null;
+    }
+
+    function tryPlaceItem(screenX, screenY, itemData) {
+        // アイテムの中心位置基準で判定
+        const pos = getGridPos(screenX, screenY);
+        if (!pos) return false;
+
+        // 配置可能かチェック
+        // itemData.shapeの中心をposに合わせる簡易ロジック（左上基準にする）
+        // 補正: アイテムの形状の幅/2を引いて左上を合わせる計算が必要だが、
+        // 今回はシンプルに「指のある場所＝アイテムの左上のマス」とする
+        
+        const startC = pos.c - Math.floor(itemData.shape[0].length / 2); 
+        const startR = pos.r - Math.floor(itemData.shape.length / 2);
+
+        // チェック
+        for (let r = 0; r < itemData.shape.length; r++) {
+            for (let c = 0; c < itemData.shape[r].length; c++) {
+                if (itemData.shape[r][c] === 1) {
+                    const targetC = startC + c;
+                    const targetR = startR + r;
+                    // 枠外または既に埋まっている場合
+                    if (targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // 配置確定
+        for (let r = 0; r < itemData.shape.length; r++) {
+            for (let c = 0; c < itemData.shape[r].length; c++) {
+                if (itemData.shape[r][c] === 1) {
+                    grid[startR + r][startC + c] = { color: itemData.color, icon: itemData.icon };
+                }
+            }
+        }
+        renderGrid();
+        return true;
+    }
+
+    // --- ハイライト表示 ---
+    function highlightGrid(screenX, screenY, shape) {
+        clearHighlight();
+        const pos = getGridPos(screenX, screenY);
+        if (!pos) return;
+
+        const startC = pos.c - Math.floor(shape[0].length / 2);
+        const startR = pos.r - Math.floor(shape.length / 2);
+        let isValid = true;
+        let cellsToHighlight = [];
+
+        // まず配置可能かチェック
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[r].length; c++) {
+                if (shape[r][c] === 1) {
+                    const targetC = startC + c;
+                    const targetR = startR + r;
+                    if (targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
+                        isValid = false;
+                    } else {
+                        // グリッド内のDOM要素を探す
+                        const index = targetR * COLS + targetC;
+                        if(gridContainer.children[index]) cellsToHighlight.push(gridContainer.children[index]);
+                    }
+                }
+            }
+        }
+
+        cellsToHighlight.forEach(el => {
+            el.classList.add(isValid ? 'highlight' : 'invalid');
+        });
+    }
+
+    function clearHighlight() {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => {
+            c.classList.remove('highlight');
+            c.classList.remove('invalid');
+        });
+    }
+
+    // --- ライン消去 & ゲームオーバー ---
+    function checkLines() {
+        // 横一列
+        for (let r = ROWS - 1; r >= 0; r--) {
+            if (grid[r].every(cell => cell !== null)) {
+                grid.splice(r, 1);
+                grid.unshift(Array(COLS).fill(null));
+                score += 100;
+                r++; // 落ちてきた行を再チェック
+            }
+        }
+        // 縦一列 (簡易実装：今回は横のみでも十分面白いが、縦も実装)
+        for (let c = 0; c < COLS; c++) {
+            let isColFull = true;
+            for (let r = 0; r < ROWS; r++) {
+                if (!grid[r][c]) isColFull = false;
+            }
+            if (isColFull) {
+                for (let r = 0; r < ROWS; r++) grid[r][c] = null; // 列を消す
+                score += 100;
+            }
+        }
+        
+        // 隙間詰め（重力）は今回は無し（インベントリなので）
+        // そのまま描写更新
+        updateScore();
+        renderGrid();
+    }
+
+    function checkGameOver() {
+        // 生成されたアイテムがどこにも置けないかチェックするのは重いので
+        // 簡易的に「空きマスが極端に少ない」などで判定するか、
+        // 本格的にやるなら全探索。ここでは未実装（プレイヤーの判断に委ねる）
+        // ※要望があれば「詰み判定」ロジックを追加します
+    }
+    
+    function resetGame() {
+        document.getElementById('game-over').style.display = 'none';
+        spawner.innerHTML = '';
+        init();
+    }
+
+    function updateScore() {
+        scoreBoard.textContent = `Score: ${score}`;
+    }
+
+    // ゲーム開始
+    init();
+
+</script>
+</body>
+</html>
