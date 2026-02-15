@@ -6,7 +6,7 @@
     <title>Battle Inventory</title>
     <style>
         body {
-            background-color: #202020;
+            background-color: #1a1a1a;
             color: white;
             font-family: 'Verdana', sans-serif;
             margin: 0;
@@ -16,33 +16,37 @@
             height: 100vh;
             touch-action: none;
             overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
-        /* --- バトル画面 --- */
+        /* --- ヘッダー & バトル画面 --- */
         #battle-area {
             width: 100%;
-            height: 180px;
-            background: #333;
+            height: 25vh;
+            background: #2c3e50;
             display: flex;
-            justify-content: space-between;
+            justify-content: space-around;
             align-items: center;
-            padding: 10px 20px;
+            padding: 10px;
             box-sizing: border-box;
             border-bottom: 4px solid #000;
+            position: relative;
         }
 
         .status-box {
             text-align: center;
-            width: 40%;
+            width: 35%;
         }
         
         .hp-bar {
             width: 100%;
-            height: 15px;
+            height: 12px;
             background: #555;
             border: 2px solid #000;
             margin-top: 5px;
-            position: relative;
+            border-radius: 6px;
+            overflow: hidden;
         }
         .hp-fill {
             height: 100%;
@@ -53,53 +57,79 @@
         .enemy-hp { background: #e74c3c; }
 
         #enemy-sprite {
-            font-size: 60px;
-            animation: bounce 2s infinite;
+            font-size: 50px;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+            transition: transform 0.1s;
         }
 
-        /* --- グリッド --- */
+        /* ダメージ表示用 */
+        .damage-popup {
+            position: absolute;
+            color: #ffeb3b;
+            font-weight: bold;
+            font-size: 24px;
+            pointer-events: none;
+            animation: floatUp 0.8s forwards;
+            text-shadow: 2px 2px 0 #000;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
+
+        /* --- グリッド（カバン） --- */
+        #grid-wrapper {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
         #grid-container {
-            margin-top: 10px;
             display: grid;
             grid-template-columns: repeat(6, 1fr);
             gap: 2px;
-            background-color: #4a3b32; /* 革のカバンっぽい色 */
-            padding: 5px;
+            background-color: #5d4037;
+            padding: 6px;
             border: 4px solid #8d6e63;
-            border-radius: 4px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
         }
 
         .cell {
-            width: 45px;
-            height: 45px;
+            width: 42px; /* スマホサイズに合わせて調整 */
+            height: 42px;
             background-color: #3e2723;
-            border-radius: 2px;
+            border-radius: 4px;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 24px;
+            font-size: 20px;
         }
 
         .cell.filled { box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
-        .cell.highlight { background-color: rgba(46, 204, 113, 0.5); }
-        .cell.invalid { background-color: rgba(231, 76, 60, 0.5); }
+        .cell.highlight { background-color: rgba(46, 204, 113, 0.6); }
+        .cell.invalid { background-color: rgba(231, 76, 60, 0.6); }
 
-        /* --- スポーナー --- */
+        /* --- アイテム置き場 --- */
         #spawner {
-            margin-top: auto;
-            margin-bottom: 20px;
+            height: 18vh;
+            width: 100%;
             display: flex;
             gap: 15px;
-            height: 100px;
             align-items: center;
             justify-content: center;
-            width: 100%;
+            background: #222;
+            border-top: 2px solid #444;
         }
 
         .item-preview {
             display: grid;
             gap: 1px;
-            cursor: grab;
+            touch-action: none;
+            transform-origin: center;
+            transition: transform 0.1s, opacity 0.2s;
         }
         
         .item-cell {
@@ -111,47 +141,65 @@
             font-size: 14px;
             color: white;
             border-radius: 2px;
+            box-shadow: inset 0 0 2px rgba(255,255,255,0.2);
         }
 
+        /* ドラッグ中 */
         .dragging {
             position: fixed;
             pointer-events: none;
-            z-index: 1000;
+            z-index: 9999;
             opacity: 0.9;
-            transform: scale(1.5);
+            transform: scale(1.2); /* 少し大きく */
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
         }
 
-        /* --- エフェクト --- */
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        
-        #message-overlay {
+        /* --- オーバーレイ（スタート・結果） --- */
+        #overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
-            display: none;
+            background: rgba(0,0,0,0.9);
+            display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 2000;
+            z-index: 10000;
             text-align: center;
         }
-        #message-title { font-size: 32px; font-weight: bold; margin-bottom: 20px; color: gold; }
+        #overlay h1 { color: #f1c40f; margin-bottom: 10px; font-size: 28px; }
+        #overlay p { margin: 20px; color: #ddd; line-height: 1.6; }
         button {
-            padding: 15px 30px;
+            padding: 15px 40px;
             font-size: 20px;
             background: #e67e22;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 30px;
             cursor: pointer;
+            box-shadow: 0 4px 0 #d35400;
+            transition: transform 0.1s;
+        }
+        button:active { transform: translateY(4px); box-shadow: none; }
+        
+        #sound-toggle {
+            position: absolute;
+            top: 10px; right: 10px;
+            background: #444;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 100;
         }
     </style>
 </head>
 <body>
 
+    <div id="sound-toggle" onclick="toggleSound()">🔇 Sound OFF</div>
+
     <div id="battle-area">
         <div class="status-box">
-            <div id="player-name">勇者 (You)</div>
+            <div id="player-name">勇者</div>
             <div class="hp-bar"><div id="player-hp-bar" class="hp-fill"></div></div>
             <div id="player-hp-text">100/100</div>
         </div>
@@ -159,321 +207,321 @@
         <div id="enemy-sprite">👾</div>
 
         <div class="status-box">
-            <div id="enemy-name">スライム Lv.1</div>
+            <div id="enemy-name">スライム</div>
             <div class="hp-bar"><div id="enemy-hp-bar" class="hp-fill enemy-hp"></div></div>
             <div id="enemy-hp-text">50/50</div>
         </div>
     </div>
 
-    <div id="grid-container"></div>
+    <div id="grid-wrapper">
+        <div id="grid-container"></div>
+    </div>
 
     <div id="spawner"></div>
 
-    <div id="message-overlay">
-        <div id="message-title">GAME OVER</div>
-        <div id="message-desc" style="color:white; margin-bottom:20px;"></div>
-        <button onclick="resetGame()">もう一度</button>
+    <div id="overlay">
+        <h1 id="msg-title">Battle Inventory</h1>
+        <p id="msg-text">
+            アイテムを並べて戦おう！<br>
+            横か縦に揃えると攻撃！<br>
+            ❤️を消すと回復！
+        </p>
+        <button onclick="startGame()">Battle Start</button>
     </div>
 
 <script>
-    // --- ゲーム設定 ---
-    const COLS = 6;
-    const ROWS = 7; // 少し狭くして難易度UP
-    
-    // アイテム定義：type: 'atk' (攻撃), 'def' (回復/防御)
-    const ITEMS = [
-        { shape: [[1]], type: 'atk', color: '#e74c3c', icon: '🍎' }, // りんご（小回復? いえ、投げて攻撃です）
-        { shape: [[1],[1]], type: 'atk', color: '#c0392b', icon: '🗡️' }, // 剣（縦）
-        { shape: [[1,1]], type: 'atk', color: '#c0392b', icon: '🗡️' }, // 剣（横）
-        { shape: [[1,1],[1,1]], type: 'def', color: '#f1c40f', icon: '🛡️' }, // 盾
-        { shape: [[1,0],[1,1]], type: 'def', color: '#2980b9', icon: '🔮' }, // 魔法
-        { shape: [[0,1],[1,1]], type: 'def', color: '#2ecc71', icon: '🌿' }, // 草
-        { shape: [[1,1,1]], type: 'atk', color: '#8e44ad', icon: '🥖' }, // パン（長い）
-    ];
+    /* =========================================
+       1. オーディオエンジン (Web Audio API)
+       ========================================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let isSoundOn = false;
 
-    // 敵データ
-    const ENEMIES = [
-        { name: "スライム", hp: 30, atk: 5, icon: "💧" },
-        { name: "ゴブリン", hp: 60, atk: 8, icon: "👺" },
-        { name: "オーク", hp: 100, atk: 12, icon: "🐷" },
-        { name: "ゴーレム", hp: 150, atk: 15, icon: "🗿" },
-        { name: "ドラゴン", hp: 300, atk: 25, icon: "🐲" } // Boss
-    ];
-
-    // --- 変数 ---
-    let grid = [];
-    let currentEnemyIndex = 0;
-    let playerHP = 100;
-    let maxPlayerHP = 100;
-    let enemyHP = 0;
-    let maxEnemyHP = 0;
-    
-    // DOM要素
-    const gridContainer = document.getElementById('grid-container');
-    const spawner = document.getElementById('spawner');
-    const overlay = document.getElementById('message-overlay');
-    
-    // --- 初期化 ---
-    function init() {
-        grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
-        currentEnemyIndex = 0;
-        playerHP = 100;
-        spawnEnemy(0);
-        updateBattleUI();
-        renderGrid();
-        spawner.innerHTML = '';
-        spawnItem(); spawnItem(); spawnItem();
-        overlay.style.display = 'none';
+    function toggleSound() {
+        isSoundOn = !isSoundOn;
+        document.getElementById('sound-toggle').textContent = isSoundOn ? "🔊 Sound ON" : "🔇 Sound OFF";
+        if(isSoundOn && audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function spawnEnemy(index) {
-        if (index >= ENEMIES.length) {
-            gameClear();
+    function playTone(type, freq, duration, vol = 0.1) {
+        if (!isSoundOn) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    const SFX = {
+        grab: () => playTone('sine', 400, 0.1),
+        drop: () => playTone('square', 200, 0.1),
+        error: () => playTone('sawtooth', 100, 0.2),
+        attack: () => {
+            playTone('square', 150, 0.1);
+            setTimeout(() => playTone('square', 100, 0.2), 100);
+        },
+        heal: () => {
+            playTone('sine', 600, 0.2);
+            setTimeout(() => playTone('sine', 800, 0.4), 100);
+        },
+        win: () => {
+            [440, 554, 659, 880].forEach((f, i) => setTimeout(() => playTone('triangle', f, 0.3), i*100));
+        },
+        lose: () => {
+            [300, 250, 200, 150].forEach((f, i) => setTimeout(() => playTone('sawtooth', f, 0.4), i*150));
+        }
+    };
+
+    /* =========================================
+       2. ゲーム設定 & データ
+       ========================================= */
+    const COLS = 6;
+    const ROWS = 6; // スマホで見やすいように正方形に
+    
+    // アイテム: シンプルに3種類だけ（通常、回復、レア攻撃）
+    // type: 0=通常(茶), 1=回復(赤/ハート), 2=強攻撃(金)
+    const SHAPES = [
+        [[1]], [[1,1]], [[1],[1]], // 1マス, 2マス
+        [[1,1],[1,1]], // 2x2
+        [[1,1,1]], [[1],[1],[1]], // 3マス
+        [[1,0],[1,1]], [[0,1],[1,1]], // L字
+        [[1,1,0],[0,1,1]], // S字
+        [[0,1,0],[1,1,1]] // 凸
+    ];
+
+    const COLORS = [
+        { color: '#8d6e63', icon: '📦', type: 'atk' }, // 茶色：通常
+        { color: '#e74c3c', icon: '❤️', type: 'heal' }, // 赤：回復
+        { color: '#f1c40f', icon: '⚔️', type: 'crit' }  // 金：強攻撃
+    ];
+
+    const ENEMIES = [
+        { name: "スライム", hp: 50, atk: 5, icon: "💧" },
+        { name: "コウモリ", hp: 80, atk: 8, icon: "🦇" },
+        { name: "スケルトン", hp: 120, atk: 12, icon: "💀" },
+        { name: "ドラゴン", hp: 300, atk: 20, icon: "🐲" }
+    ];
+
+    let grid = [];
+    let currentEnemyIdx = 0;
+    let playerHP = 100;
+    let enemyHP = 50;
+    const maxHP = 100;
+    let isGameOver = false;
+
+    // DOM
+    const gridEl = document.getElementById('grid-container');
+    const spawnerEl = document.getElementById('spawner');
+    const overlay = document.getElementById('overlay');
+
+    /* =========================================
+       3. メインロジック
+       ========================================= */
+    function startGame() {
+        overlay.style.display = 'none';
+        if(isSoundOn && audioCtx.state === 'suspended') audioCtx.resume();
+        initGame();
+    }
+
+    function initGame() {
+        grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+        currentEnemyIdx = 0;
+        playerHP = 100;
+        isGameOver = false;
+        loadEnemy(0);
+        updateUI();
+        renderGrid();
+        spawnerEl.innerHTML = '';
+        spawnItem(); spawnItem(); spawnItem();
+    }
+
+    function loadEnemy(idx) {
+        if(idx >= ENEMIES.length) {
+            gameEnd(true);
             return;
         }
-        const data = ENEMIES[index];
+        const data = ENEMIES[idx];
         enemyHP = data.hp;
-        maxEnemyHP = data.hp;
-        document.getElementById('enemy-name').textContent = `${data.name} Lv.${index+1}`;
+        document.getElementById('enemy-name').textContent = data.name;
         document.getElementById('enemy-sprite').textContent = data.icon;
-        updateBattleUI();
-    }
-
-    // --- バトルロジック ---
-    function turnProcess(linesCleared, clearedItems) {
-        // 1. プレイヤーの攻撃（ライン消去）
-        let damage = 0;
-        let heal = 0;
-
-        // 消えたアイテムの種類を集計
-        clearedItems.forEach(item => {
-            if (item.type === 'atk') damage += 10; // 攻撃アイテム1個につき10ダメージ
-            if (item.type === 'def') heal += 5;    // 防御アイテム1個につき5回復
-        });
-
-        // ラインボーナス
-        damage += linesCleared * 20; 
-
-        // ダメージ適用
-        if (damage > 0) {
-            enemyHP -= damage;
-            showDamageEffect(damage, 'enemy');
-        }
-        if (heal > 0) {
-            playerHP = Math.min(playerHP + heal, maxPlayerHP);
-        }
-
-        // 2. 敵の生存判定
-        if (enemyHP <= 0) {
-            enemyHP = 0;
-            updateBattleUI();
-            setTimeout(() => {
-                currentEnemyIndex++;
-                spawnEnemy(currentEnemyIndex);
-            }, 500);
-            return; // 敵が倒れたら攻撃してこない
-        }
-
-        // 3. 敵の攻撃（アイテムを置くたび、かつライン消せなかったら痛い？）
-        // シンプルに「毎回攻撃してくるが、ライン消せば軽減」など
-        // 今回はシンプルに「ターン毎に固定ダメージ」
-        let enemyAtk = ENEMIES[currentEnemyIndex].atk;
-        if (linesCleared > 0) {
-            // ラインを消したターンは防御成功でダメージ半減とか
-            // enemyAtk = 0; // 今回は「ライン消せばノーダメージ」にしてみる？
-            // いや、スリルが欲しいので「攻撃は食らう」
-        }
-        
-        playerHP -= enemyAtk;
-        showDamageEffect(enemyAtk, 'player');
-
-        // 4. プレイヤーの生存判定
-        if (playerHP <= 0) {
-            playerHP = 0;
-            gameOver("勇者は倒れた...");
-        }
-
-        updateBattleUI();
-    }
-
-    function updateBattleUI() {
-        const pRate = (playerHP / maxPlayerHP) * 100;
-        const eRate = (enemyHP / maxEnemyHP) * 100;
-        document.getElementById('player-hp-bar').style.width = `${pRate}%`;
-        document.getElementById('enemy-hp-bar').style.width = `${eRate}%`;
-        document.getElementById('player-hp-text').textContent = `${playerHP}/${maxPlayerHP}`;
-        document.getElementById('enemy-hp-text').textContent = `${Math.max(0, enemyHP)}/${maxEnemyHP}`;
-    }
-
-    function showDamageEffect(val, target) {
-        // 簡易演出（本来は画面上に数字を浮かせる）
-        console.log(`${target} took ${val} damage!`);
-        const el = target === 'enemy' ? document.getElementById('enemy-sprite') : document.getElementById('grid-container');
-        el.style.transform = 'translateX(5px)';
-        setTimeout(() => el.style.transform = 'translateX(-5px)', 50);
-        setTimeout(() => el.style.transform = 'none', 100);
-    }
-
-    // --- ゲーム進行 ---
-    function gameClear() {
-        document.getElementById('message-title').textContent = "YOU WIN!";
-        document.getElementById('message-title').style.color = "#2ecc71";
-        document.getElementById('message-desc').textContent = "すべてのモンスターを倒した！";
-        overlay.style.display = 'flex';
-    }
-
-    function gameOver(reason) {
-        document.getElementById('message-title').textContent = "GAME OVER";
-        document.getElementById('message-title').style.color = "#e74c3c";
-        document.getElementById('message-desc').textContent = reason;
-        overlay.style.display = 'flex';
-    }
-    
-    function resetGame() {
-        init();
-    }
-
-    // --- 以下、パズルロジック（前回から変更あり） ---
-    
-    function renderGrid() {
-        gridContainer.innerHTML = '';
-        grid.forEach((row, y) => {
-            row.forEach((cell, x) => {
-                const div = document.createElement('div');
-                div.classList.add('cell');
-                if (cell) {
-                    div.classList.add('filled');
-                    div.style.backgroundColor = cell.color;
-                    div.textContent = cell.icon;
-                }
-                gridContainer.appendChild(div);
-            });
-        });
+        updateUI();
     }
 
     function spawnItem() {
-        if (spawner.children.length >= 3) return;
-        const type = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-        const el = document.createElement('div');
-        el.classList.add('item-preview');
-        el.style.gridTemplateColumns = `repeat(${type.shape[0].length}, 1fr)`;
+        if (spawnerEl.children.length >= 3) return;
+
+        // ランダム生成
+        const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+        // 20%で回復、10%で強攻撃、残り通常
+        const r = Math.random();
+        let typeIdx = 0;
+        if(r < 0.2) typeIdx = 1; 
+        else if(r < 0.3) typeIdx = 2;
         
-        type.shape.forEach(row => {
+        const style = COLORS[typeIdx];
+
+        const el = document.createElement('div');
+        el.className = 'item-preview';
+        el.style.gridTemplateColumns = `repeat(${shape[0].length}, 1fr)`;
+        
+        // データを持たせる
+        el.dataset.shape = JSON.stringify(shape);
+        el.dataset.type = style.type;
+        el.dataset.color = style.color;
+        el.dataset.icon = style.icon;
+
+        shape.forEach(row => {
             row.forEach(cell => {
                 const cellDiv = document.createElement('div');
-                cellDiv.classList.add('item-cell');
+                cellDiv.className = 'item-cell';
                 if (cell) {
-                    cellDiv.style.backgroundColor = type.color;
-                    cellDiv.textContent = type.icon;
+                    cellDiv.style.backgroundColor = style.color;
+                    cellDiv.textContent = style.icon;
                 } else {
                     cellDiv.style.opacity = 0;
                 }
                 el.appendChild(cellDiv);
             });
         });
-        addDragLogic(el, type);
-        spawner.appendChild(el);
+
+        addTouchLogic(el);
+        spawnerEl.appendChild(el);
     }
 
-    function addDragLogic(element, itemData) {
+    /* =========================================
+       4. タッチ＆ドラッグ処理（位置修正版）
+       ========================================= */
+    function addTouchLogic(el) {
         let isDragging = false;
         let clone = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        // 視認性向上のためのオフセット（指の上に表示）
+        const VISUAL_OFFSET_Y = 80; 
 
-        const startDrag = (e) => {
+        const start = (e) => {
+            if(isGameOver) return;
             e.preventDefault();
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = el.getBoundingClientRect();
+            
+            // タッチ位置と要素の中心のズレを計算
+            dragOffsetX = touch.clientX - (rect.left + rect.width / 2);
+            dragOffsetY = touch.clientY - (rect.top + rect.height / 2);
+
             isDragging = true;
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-            clone = element.cloneNode(true);
-            clone.classList.add('dragging');
-            clone.style.width = element.offsetWidth + 'px';
-            clone.style.height = element.offsetHeight + 'px';
+            clone = el.cloneNode(true);
+            clone.className = 'dragging';
+            
+            // 元のサイズを維持
+            clone.style.width = rect.width + 'px';
+            clone.style.height = rect.height + 'px';
+            
             document.body.appendChild(clone);
-            moveAt(clientX, clientY);
-            element.style.opacity = '0.3';
+            move(e);
+            
+            el.style.opacity = 0.3;
+            SFX.grab();
         };
 
-        const moveAt = (x, y) => {
-            if(!clone) return;
-            clone.style.left = x - clone.offsetWidth / 2 + 'px';
-            clone.style.top = y - clone.offsetHeight / 2 - 50 + 'px'; 
-            highlightGrid(x, y - 50, itemData.shape);
+        const move = (e) => {
+            if(!isDragging || !clone) return;
+            const touch = e.touches ? e.touches[0] : e;
+            
+            // 指の位置 - ズレ - 視認性オフセット
+            const x = touch.clientX - dragOffsetX;
+            const y = touch.clientY - dragOffsetY - VISUAL_OFFSET_Y;
+
+            clone.style.left = (x - clone.offsetWidth / 2) + 'px';
+            clone.style.top = (y - clone.offsetHeight / 2) + 'px';
+
+            // グリッド判定のために「本来あるべき場所（指の下ではなく表示位置）」を渡す
+            highlightGrid(x, y, JSON.parse(el.dataset.shape));
         };
 
-        const onMove = (e) => {
-            if (!isDragging) return;
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            moveAt(clientX, clientY);
-        };
-
-        const endDrag = (e) => {
-            if (!isDragging) return;
+        const end = (e) => {
+            if(!isDragging) return;
             isDragging = false;
-            const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-            const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+            
+            // 最後の位置を取得
+            const x = parseFloat(clone.style.left) + clone.offsetWidth / 2;
+            const y = parseFloat(clone.style.top) + clone.offsetHeight / 2;
+            
+            const shape = JSON.parse(el.dataset.shape);
+            const success = tryPlace(x, y, shape, {
+                type: el.dataset.type,
+                color: el.dataset.color,
+                icon: el.dataset.icon
+            });
 
-            const dropSuccess = tryPlaceItem(clientX, clientY - 50, itemData);
-
-            if (dropSuccess) {
-                element.remove();
+            if(success) {
+                SFX.drop();
+                el.remove();
                 spawnItem();
-                // ライン判定 & ターン処理
-                checkLinesAndTurn();
+                checkLines();
+                // 敵の攻撃ターン
+                enemyTurn();
             } else {
-                element.style.opacity = '1';
+                SFX.error();
+                el.style.opacity = 1;
             }
-            if(clone) clone.remove();
+
+            clone.remove();
             clearHighlight();
         };
 
-        element.addEventListener('mousedown', startDrag);
-        element.addEventListener('touchstart', startDrag, {passive: false});
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('touchmove', onMove, {passive: false});
-        document.addEventListener('mouseup', endDrag);
-        document.addEventListener('touchend', endDrag);
+        el.addEventListener('mousedown', start);
+        el.addEventListener('touchstart', start, {passive: false});
+        document.addEventListener('mousemove', move);
+        document.addEventListener('touchmove', move, {passive: false});
+        document.addEventListener('mouseup', end);
+        document.addEventListener('touchend', end);
     }
 
+    // グリッド座標計算
     function getGridPos(x, y) {
-        const rect = gridContainer.getBoundingClientRect();
+        const rect = gridEl.getBoundingClientRect();
+        // 範囲内か簡易チェック
         if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
+
         const cellSize = rect.width / COLS;
-        const col = Math.floor((x - rect.left) / cellSize);
-        const row = Math.floor((y - rect.top) / cellSize);
-        if (col >= 0 && col < COLS && row >= 0 && row < ROWS) return { c: col, r: row };
+        const c = Math.floor((x - rect.left) / cellSize);
+        const r = Math.floor((y - rect.top) / cellSize);
+
+        if (c >= 0 && c < COLS && r >= 0 && r < ROWS) return { c, r };
         return null;
     }
 
-    function tryPlaceItem(screenX, screenY, itemData) {
-        const pos = getGridPos(screenX, screenY);
+    function tryPlace(x, y, shape, data) {
+        const pos = getGridPos(x, y);
         if (!pos) return false;
-        const startC = pos.c - Math.floor(itemData.shape[0].length / 2); 
-        const startR = pos.r - Math.floor(itemData.shape.length / 2);
 
-        // チェック
-        for (let r = 0; r < itemData.shape.length; r++) {
-            for (let c = 0; c < itemData.shape[r].length; c++) {
-                if (itemData.shape[r][c] === 1) {
+        // 配置の中心座標から左上を計算
+        const startC = pos.c - Math.floor(shape[0].length / 2);
+        const startR = pos.r - Math.floor(shape.length / 2);
+
+        // 1. はみ出し＆衝突チェック
+        for(let r=0; r<shape.length; r++) {
+            for(let c=0; c<shape[r].length; c++) {
+                if(shape[r][c] === 1) {
                     const targetC = startC + c;
                     const targetR = startR + r;
-                    if (targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
+                    if(targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
                         return false;
                     }
                 }
             }
         }
-        // 配置
-        for (let r = 0; r < itemData.shape.length; r++) {
-            for (let c = 0; c < itemData.shape[r].length; c++) {
-                if (itemData.shape[r][c] === 1) {
-                    // アイテム情報をグリッドに保存
-                    grid[startR + r][startC + c] = { 
-                        color: itemData.color, 
-                        icon: itemData.icon,
-                        type: itemData.type // atk or def
-                    };
+
+        // 2. 配置確定
+        for(let r=0; r<shape.length; r++) {
+            for(let c=0; c<shape[r].length; c++) {
+                if(shape[r][c] === 1) {
+                    grid[startR + r][startC + c] = { ...data };
                 }
             }
         }
@@ -481,82 +529,188 @@
         return true;
     }
 
-    function highlightGrid(screenX, screenY, shape) {
+    function highlightGrid(x, y, shape) {
         clearHighlight();
-        const pos = getGridPos(screenX, screenY);
+        const pos = getGridPos(x, y);
         if (!pos) return;
+
         const startC = pos.c - Math.floor(shape[0].length / 2);
         const startR = pos.r - Math.floor(shape.length / 2);
         let isValid = true;
-        let cellsToHighlight = [];
+        let targets = [];
 
-        for (let r = 0; r < shape.length; r++) {
-            for (let c = 0; c < shape[r].length; c++) {
-                if (shape[r][c] === 1) {
+        for(let r=0; r<shape.length; r++) {
+            for(let c=0; c<shape[r].length; c++) {
+                if(shape[r][c] === 1) {
                     const targetC = startC + c;
                     const targetR = startR + r;
-                    if (targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
+                    if(targetC < 0 || targetC >= COLS || targetR < 0 || targetR >= ROWS || grid[targetR][targetC]) {
                         isValid = false;
                     } else {
-                        const index = targetR * COLS + targetC;
-                        if(gridContainer.children[index]) cellsToHighlight.push(gridContainer.children[index]);
+                        const idx = targetR * COLS + targetC;
+                        if(gridEl.children[idx]) targets.push(gridEl.children[idx]);
                     }
                 }
             }
         }
-        cellsToHighlight.forEach(el => el.classList.add(isValid ? 'highlight' : 'invalid'));
+
+        targets.forEach(el => el.classList.add(isValid ? 'highlight' : 'invalid'));
     }
 
     function clearHighlight() {
-        document.querySelectorAll('.cell').forEach(c => {
-            c.classList.remove('highlight');
-            c.classList.remove('invalid');
+        Array.from(document.getElementsByClassName('cell')).forEach(el => {
+            el.classList.remove('highlight', 'invalid');
         });
     }
 
-    function checkLinesAndTurn() {
-        let linesCleared = 0;
-        let clearedItems = []; // 消えたアイテムのリスト
-
-        // 横一列
-        for (let r = ROWS - 1; r >= 0; r--) {
-            if (grid[r].every(cell => cell !== null)) {
-                // 消える行のアイテム情報を保存
-                grid[r].forEach(cell => clearedItems.push(cell));
-                
-                grid.splice(r, 1);
-                grid.unshift(Array(COLS).fill(null));
-                linesCleared++;
-                r++;
-            }
-        }
-        // 縦一列
-        for (let c = 0; c < COLS; c++) {
-            let isColFull = true;
-            for (let r = 0; r < ROWS; r++) if (!grid[r][c]) isColFull = false;
-            if (isColFull) {
-                for (let r = 0; r < ROWS; r++) {
-                    clearedItems.push(grid[r][c]);
-                    grid[r][c] = null;
+    function renderGrid() {
+        gridEl.innerHTML = '';
+        grid.forEach(row => {
+            row.forEach(cell => {
+                const div = document.createElement('div');
+                div.className = 'cell';
+                if(cell) {
+                    div.className += ' filled';
+                    div.style.backgroundColor = cell.color;
+                    div.textContent = cell.icon;
                 }
-                linesCleared++;
-            }
-        }
-        
-        renderGrid();
-
-        // バトル処理へ
-        turnProcess(linesCleared, clearedItems);
-
-        // 敗北条件チェック（カバンが詰まってないか？）
-        // ※簡易的に、3つのアイテム候補がどれも置けなかったら詰みとする判定を入れるとより親切
-        // 今回はシンプルに「置く場所がない」はプレイヤーの判断に委ね、HP0をメインの敗北とする
-        // ただし、spawnerが埋まっていて置けないと進行不可になるので、
-        // 本来は `checkGameOver` で「全アイテム配置不可」を判定すべき。
-        // ここでは「HPでの死亡」を優先実装。
+                gridEl.appendChild(div);
+            });
+        });
     }
 
-    init();
+    /* =========================================
+       5. バトル & パズル判定（重力なし）
+       ========================================= */
+    function checkLines() {
+        let linesCleared = 0;
+        let totalDmg = 0;
+        let totalHeal = 0;
+
+        // 横
+        for(let r=0; r<ROWS; r++) {
+            if(grid[r].every(c => c !== null)) {
+                // 効果計算
+                grid[r].forEach(c => {
+                    if(c.type === 'atk') totalDmg += 2;
+                    if(c.type === 'crit') totalDmg += 5;
+                    if(c.type === 'heal') totalHeal += 5;
+                });
+                totalDmg += 10; // ライン基本ダメージ
+                linesCleared++;
+                grid[r].fill(null); // 消すだけ（詰めない）
+            }
+        }
+        // 縦
+        for(let c=0; c<COLS; c++) {
+            let col = [];
+            for(let r=0; r<ROWS; r++) col.push(grid[r][c]);
+            if(col.every(c => c !== null)) {
+                col.forEach(c => {
+                    if(c.type === 'atk') totalDmg += 2;
+                    if(c.type === 'crit') totalDmg += 5;
+                    if(c.type === 'heal') totalHeal += 5;
+                });
+                totalDmg += 10;
+                linesCleared++;
+                for(let r=0; r<ROWS; r++) grid[r][c] = null;
+            }
+        }
+
+        if(linesCleared > 0) {
+            SFX.attack();
+            if(totalHeal > 0) SFX.heal();
+            applyBattleEffect(totalDmg, totalHeal);
+            renderGrid();
+        }
+    }
+
+    function applyBattleEffect(dmg, heal) {
+        if(dmg > 0) {
+            enemyHP -= dmg;
+            showPopup(dmg, '#enemy-sprite');
+            // ダメージ演出
+            const s = document.getElementById('enemy-sprite');
+            s.style.transform = 'translate(5px, -5px) scale(0.9)';
+            setTimeout(() => s.style.transform = 'none', 100);
+        }
+        if(heal > 0) {
+            playerHP = Math.min(playerHP + heal, maxHP);
+            showPopup("+" + heal, '#player-name', '#2ecc71');
+        }
+        updateUI();
+
+        if(enemyHP <= 0) {
+            setTimeout(() => {
+                currentEnemyIdx++;
+                loadEnemy(currentEnemyIdx);
+            }, 500);
+        }
+    }
+
+    function enemyTurn() {
+        if(enemyHP <= 0) return;
+        
+        // シンプルに毎回殴ってくる（ダメージは敵による）
+        const dmg = ENEMIES[currentEnemyIdx].atk;
+        playerHP -= dmg;
+        
+        // プレイヤー被弾演出
+        const b = document.getElementById('grid-container');
+        b.style.transform = 'translateX(-5px)';
+        setTimeout(() => b.style.transform = 'none', 50);
+        
+        if(playerHP <= 0) {
+            playerHP = 0;
+            gameEnd(false);
+        }
+        updateUI();
+    }
+
+    function showPopup(text, selector, color='#ffeb3b') {
+        const el = document.createElement('div');
+        el.className = 'damage-popup';
+        el.textContent = text;
+        el.style.color = color;
+        const target = document.querySelector(selector);
+        const rect = target.getBoundingClientRect();
+        el.style.left = (rect.left + 20) + 'px';
+        el.style.top = rect.top + 'px';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
+    }
+
+    function updateUI() {
+        document.getElementById('player-hp-text').textContent = `${Math.floor(playerHP)}/${maxHP}`;
+        document.getElementById('player-hp-bar').style.width = `${(playerHP/maxHP)*100}%`;
+        
+        const maxE = ENEMIES[currentEnemyIdx] ? ENEMIES[currentEnemyIdx].hp : 1; // 0除算防止
+        const curE = Math.max(0, enemyHP);
+        document.getElementById('enemy-hp-text').textContent = `${curE}`;
+        document.getElementById('enemy-hp-bar').style.width = `${(curE/maxE)*100}%`;
+    }
+
+    function gameEnd(isWin) {
+        isGameOver = true;
+        overlay.style.display = 'flex';
+        const title = document.getElementById('msg-title');
+        const text = document.getElementById('msg-text');
+        const btn = document.querySelector('#overlay button');
+
+        if(isWin) {
+            SFX.win();
+            title.textContent = "YOU WIN!";
+            title.style.color = "#f1c40f";
+            text.innerHTML = "伝説のドラゴンを倒した！<br>世界は平和になった！";
+        } else {
+            SFX.lose();
+            title.textContent = "GAME OVER";
+            title.style.color = "#e74c3c";
+            text.innerHTML = "勇者は倒れた...<br>再挑戦しますか？";
+        }
+        btn.textContent = "RETRY";
+    }
+
 </script>
 </body>
 </html>
